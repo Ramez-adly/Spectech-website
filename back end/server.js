@@ -77,7 +77,7 @@ server.post('/store/register', (req, res) => {
         });
     });
     
-// Start the server and initialize tables
+// Start the server 
 server.listen(port, () => {
     console.log(`Server started listening on port ${port}`);
     
