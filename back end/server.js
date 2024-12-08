@@ -90,8 +90,12 @@ server.post('/user/register', (req, res) => {
 
 // Store registration route
 server.post('/store/register', (req, res) => {
-    const { storeName, storeDescription, location, phoneNumber, openingHours, deliveryAvailable } = req.body;
-    
+    let storeName = req.body.storeName;
+    let storeDescription = req.body.storeDescription;
+    let location = req.body.location;
+    let phoneNumber = req.body.phoneNumber;
+    let openingHours = req.body.openingHours;
+    let deliveryAvailable = req.body.deliveryAvailable;
     if (!storeName || !location || !phoneNumber) {
         return res.status(400).send( "Missing required fields" );
     }
