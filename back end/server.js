@@ -61,7 +61,7 @@ const CreateReviewTable = `CREATE TABLE IF NOT EXISTS reviews(
 server.post('/user/login', (req, res) => {
     let email = req.body.email;
     let password = req.body.password;
-    db.get(`SELECT * FROM USERS WHERE EMAIL ='${email}'AND PASSWORD = '${password}'`, (err, row) => {
+    db.get(`SELECT * FROM USERS WHERE EMAIL = ?AND PASSWORD = ?`, (err, row) => {
         if (err || !row) {
             return res.status(401).send("Invalid credentials");
         } else {
@@ -76,7 +76,7 @@ server.post('/user/register', (req, res) => {
     let password = req.body.password;
     let email = req.body.email;
     let customertype = req.body.customertype;
-    db.run(`INSERT INTO users(name,email,password,customertype)VALUES('${name}','${email}','${password}','${customertype}')`, 
+    db.run(`INSERT INTO users(name,email,password,customertype)VALUES( ?, ?, ?, ?)`, 
          (err) => {
             if (err) {
                 return res.status(500).send("Error during registration"+ err.message);
@@ -99,7 +99,7 @@ server.post('/store/register', (req, res) => {
     const query = `INSERT INTO stores (storeName, storeDescription, location, phoneNumber, openingHours, deliveryAvailable) 
                    VALUES (?, ?, ?, ?, ?, ?)`;
     
-    db.run(query, [storeName, storeDescription, location, phoneNumber, openingHours, deliveryAvailable], function(err) {
+    db.run(query, (err) => {
         if (err) {
             return res.status(500).send({ error: err.message });
         }
