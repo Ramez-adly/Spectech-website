@@ -11,7 +11,7 @@ server.use(express.json());
 server.post('/user/login', (req, res) => {
     let email = req.body.email;
     let password = req.body.password;
-    db.get(`SELECT * FROM USERS WHERE EMAIL = ?AND PASSWORD = ?`, (err, row) => {
+    db.get(`SELECT * FROM USERS WHERE EMAIL = ? AND PASSWORD = ?`, [email, password], (err, row) => {
         if (err || !row) {
             return res.status(401).send("Invalid credentials");
         } else {
@@ -51,9 +51,9 @@ server.post('/store/register', (req, res) => {
     }
 
     const query = `INSERT INTO stores (storeName, storeDescription, location, phoneNumber, openingHours, deliveryAvailable) 
-                   VALUES (?, ?, ?, ?, ?, ?)`;
+                   VALUES (?, ?, ?, ?, ?, ?)` ;
     
-    db.run(query, (err) => {
+    db.run(query, [storeName, storeDescription, location, phoneNumber, openingHours, deliveryAvailable], (err) => {
         if (err) {
             return res.status(500).send({ error: err.message });
         }
@@ -64,7 +64,7 @@ server.post('/store/register', (req, res) => {
     server.get('/products/search', (req, res) => {
         let name = req.query.name;
         let stock = req.query.stock;
-        let query = 'SELECT * FROM PRODUCTS WHERE stock > 0 AND name = ?';
+        let query = 'SELECT * FROM PRODUCTS WHERE stock > 0 AND name = ?'; 
         let params = [name];
     
         db.all(query, params, (err, rows) => {
