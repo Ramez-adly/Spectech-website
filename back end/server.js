@@ -111,7 +111,22 @@ server.post('/store/register', (req, res) => {
         });
     });
 
-
+    server.get('/products/search', (req, res) => {
+        let name = req.query.name;
+        let stock = req.query.stock;
+        let query = 'SELECT * FROM PRODUCTS WHERE stock > 0 AND name = ?';
+        let params = [name];
+    
+        db.all(query, params, (err, rows) => {
+            if (err) {
+                console.log(err);
+                return res.status(500).send(err);
+            } else {
+                return res.send(rows);
+            }
+        });
+    });
+    
 // Start the server and initialize tables
 server.listen(port, () => {
     console.log(`Server started listening on port ${port}`);
