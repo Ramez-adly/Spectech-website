@@ -11,7 +11,7 @@ server.use(express.json());
 server.post('/user/login', (req, res) => {
     let email = req.body.email;
     let password = req.body.password;
-    db.get(`SELECT * FROM USERS WHERE EMAIL = ?AND PASSWORD = ?`, (err, row) => {
+    db.get(`SELECT * FROM USERS WHERE EMAIL = ?AND PASSWORD = ?`, [email, password], (err, row) => {
         if (err || !row) {
             return res.status(401).send("Invalid credentials");
         } else {
