@@ -148,3 +148,4 @@ const query = `UPDATE products SET stock = ? WHERE ID = ?`;
 server.listen(port, () => {
     console.log(`Server started listening on port ${port}`);
 });
+
