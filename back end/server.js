@@ -184,6 +184,49 @@ server.put('/purchase', (req, res) => {
         });
     });
 });
+//// review routes for adding deleting reviews
+//add review with conditions
+server.post('/reviews/product/:productId', (req, res) => {
+    const userId = req.body.userId;
+    const rating = req.body.rating;
+    const comment = req.body.comment;
+    const productId = req.params.productId;
+
+    const checkCustomerTypeQuery = `SELECT customertype FROM users WHERE ID = ?`;
+    //check if ther user is a customer
+    db.get(checkCustomerTypeQuery, [userId], (err, user) => {
+        if (err) {
+            console.log(err);
+            return res.status(500).send('Error checking user type');
+        }
+        if (!user || user.customertype !== 'customer') {
+            return res.status(403).send('Only customers can add reviews');
+        }
+        
+        // Check if user has purchased the product
+        const checkPurchaseQuery = `SELECT * FROM purchased WHERE user_ID = ? AND products_ID = ?`;
+        db.get(checkPurchaseQuery, [userId, productId], (err, purchase) => {
+            if (err) {
+                console.log(err);
+                return res.status(500).send('Error checking purchase history');
+            }
+            if (!purchase) {
+                return res.status(403).send('You must purchase the product before reviewing');
+            }
+            
+            // Add the review
+            const addReviewQuery = `INSERT INTO reviews (user_id, product_id, rating, comment) VALUES (?, ?, ?, ?)`;
+            
+            db.run(addReviewQuery, [userId, productId, rating, comment], (err) => {
+                if (err) {
+                    console.log(err);
+                    return res.status(500).send('Error adding review');
+                }
+                return res.status(200).send('Review added successfully');
+            });
+        });
+    });
+});
 
 // Start the server 
 server.listen(port, () => {
