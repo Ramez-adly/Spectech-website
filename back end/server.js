@@ -142,8 +142,49 @@ const query = `UPDATE products SET stock = ? WHERE ID = ?`;
      } else {
          return res.status(200).send('Product modified');
  }
-});
+ });
 }); 
+// Purchase route
+server.put('/purchase', (req, res) => {
+    let productID = req.body.productID
+    let quantity = req.body.quantity
+    
+    // Query to get the product by ID and ensure there is enough stock
+    const query = `SELECT * FROM products WHERE ID = ? AND stock >= ?`;
+    
+    db.get(query, [productID, quantity], (err, row) => {
+        if (err) {
+            console.log(err);
+            return res.status(500).send(err);
+        }
+        if (!row) {
+            return res.status(404).send('Product not available in sufficient stock');
+        }
+        
+        // Calculate the total price
+        const totalPrice = row.price * quantity;
+        const insertPurchaseQuery = `INSERT INTO purchased (user_ID, products_ID, quantity, TotalPrice) 
+                                     VALUES (?, ?, ?, ?)`;
+        
+        db.run(insertPurchaseQuery, [user_ID, productID, quantity, totalPrice], (err) => {
+            if (err) {
+        console.log(err);
+                return res.status(500).send("Error logging purchase");
+            }
+
+            // Update the  stock after purchase
+            const updateStockQuery = `UPDATE products SET stock = stock - ? WHERE ID = ?`;
+            db.run(updateStockQuery, [quantity, productID], (err) => {
+                if (err) {
+                    console.log(err);
+                    return res.status(500).send("Error updating stock");
+                }
+                return res.status(200).send('Purchase successful');
+            });
+        });
+    });
+});
+
 // Start the server 
 server.listen(port, () => {
     console.log(`Server started listening on port ${port}`);
