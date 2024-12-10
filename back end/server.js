@@ -38,8 +38,6 @@ server.post('/user/register', (req, res) => {
         })
     })
 
-
-
 // Store registration route
 server.post('/store/register', (req, res) => {
     let storeName = req.body.storeName;
