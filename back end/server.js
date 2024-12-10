@@ -92,6 +92,8 @@ server.get('/products/search', (req, res) => {
         if (err) {
             console.log(err);
             return res.status(500).send(err);
+        }
+    });
 });
 
 
@@ -139,8 +141,5 @@ const query = `UPDATE products SET stock = ? WHERE ID = ?`;
 // Start the server 
 server.listen(port, () => {
     console.log(`Server started listening on port ${port}`);
-    db.serialize(() => {
-        db.run(createUserTable, (err) => {
-            if (err) {
-                console.log("Error creating USERS table:", err);
+});
        
