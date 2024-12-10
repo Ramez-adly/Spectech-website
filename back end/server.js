@@ -72,7 +72,7 @@ server.post('/store/register', (req, res) => {
             }
         });
     });
-    //product
+    //search for product
     server.get('/products/search', (req, res) => {
         let name = req.query.name;
         let stock = req.query.stock;
