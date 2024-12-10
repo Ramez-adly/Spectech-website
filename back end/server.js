@@ -11,15 +11,19 @@ server.use(express.json());
 server.post('/user/login', (req, res) => {
     let email = req.body.email;
     let password = req.body.password;
-    db.get(`SELECT * FROM USERS WHERE EMAIL = ?AND PASSWORD = ?`, [email, password], (err, row) => {
-        if (err || !row) {
-            return res.status(401).send("Invalid credentials");
-        } else {
-        return res.status(200).send("Login successful");
+
+    db.get(`SELECT * FROM USERS WHERE EMAIL = ? AND PASSWORD = ?`, [email, password], (err, row) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).send("Database error");
         }
+        if (!row) {
+
+            return res.status(401).send("Invalid credentials");
+        }
+        return res.status(200).send("Login successful");
     });
 });
-
 // User registration route
 server.post('/user/register', (req, res) => {
     let name = req.body.name;
@@ -61,38 +65,11 @@ server.post('/store/register', (req, res) => {
         res.status(200).send('Store registered successfully' );
         });
     });
-    // Get all products route 
-    server.get('/products', (req, res) => {
-        const query = 'SELECT * FROM PRODUCTS';
-        db.all(query, (err, rows) => {
-            if (err) {
-                return res.status(500).send(err + err.message);
-            } else {
-                return res.send(rows);
-            }
-        });
-    });
-    //search for product
-    server.get('/products/search', (req, res) => {
-        let name = req.query.name;
-        let stock = req.query.stock;
-        let query = 'SELECT * FROM PRODUCTS WHERE stock > 0 AND name LIKE ?';
-        let params = [name];
-    
-        db.all(query, params, (err, rows) => {
-            if (err) {
-                console.log(err);
-                return res.status(500).send(err);
-            } else {
-                return res.send(rows);
-            }
-        });
-    });
 
-// Get all stores endpoint
-server.get('/stores', (req, res) => {
-    const query = `SELECT * FROM stores`;
-    
+
+// Get all products route 
+server.get('/products', (req, res) => {
+    const query = 'SELECT * FROM PRODUCTS';
     db.all(query, (err, rows) => {
         if (err) {
             return res.status(500).send(err + err.message);
@@ -101,64 +78,69 @@ server.get('/stores', (req, res) => {
         }
     });
 });
+//search for product
+server.get('/products/search', (req, res) => {
+    let name = req.query.name;
+    let query = 'SELECT * FROM products WHERE stock > 0'
+    let params = [];
+    
+    if (name&& name.trim()!=='') {
+        query += ' AND name LIKE ?';
+        params.push(`%${name}%`);
+    }
+    db.all(query, params, (err, rows) => {
+        if (err) {
+            console.log(err);
+            return res.status(500).send(err);
+});
+
+
+// Get all stores endpoint
+server.get('/stores', (req, res) => {
+const query = `SELECT * FROM stores`;
+
+db.all(query, (err, rows) => {
+    if (err) {
+        return res.status(500).send(err + err.message);
+    } else {
+        return res.send(rows);
+    }
+});
+});
 // Add product route
 server.post('/products/addproducts', (req, res) => {
-    let name = req.body.name
-    let stock = req.body.stock
-    let price = req.body.price
-    let category = req.body.category
-    const query = `INSERT INTO products (name, stock, price, category) VALUES (?, ?, ?, ?)`;
+let name = req.body.name
+let stock = req.body.stock
+let price = req.body.price
+let category = req.body.category
+const query = `INSERT INTO products (name, stock, price, category) VALUES (?, ?, ?, ?)`;
 db.run(query, [name, stock, price, category], (err) => {
-        if (err) {
-        console.log(err);
-        return res.status(500).send("Error adding product: " + err.message);
+    if (err) {
+    console.log(err);
+    return res.status(500).send("Error adding product: " + err.message);
+}
+    else {
+        return res.status(200).send('Product added');
     }
-        else {
-            return res.status(200).send('Product added');
-        }
-    });
+});
 });
 // Modify product stock by ID
 server.put(`/products/edit/:id/:stock`,(req,res)=>{
-    const query = `UPDATE products SET stock = ? WHERE ID = ?`;
-     db.run(query, (err) => {
-         if (err) {
-         console.log(err);
-         return res.status(500).send(err);
-         } else {
-             return res.status(200).send('Product modified');
-     }
- });
- });
-// Start the server and initialize tables
+const query = `UPDATE products SET stock = ? WHERE ID = ?`; 
+ db.run(query, [req.params.stock, req.params.id], (err) => {
+     if (err) {
+     console.log(err);
+     return res.status(500).send(err);
+     } else {
+         return res.status(200).send('Product modified');
+ }
+});
+}); 
+// Start the server 
 server.listen(port, () => {
     console.log(`Server started listening on port ${port}`);
     db.serialize(() => {
         db.run(createUserTable, (err) => {
             if (err) {
                 console.log("Error creating USERS table:", err);
-            }
-        });
-
-        db.run(createProductsTable, (err) => {
-            if (err) {
-                console.log("Error creating PRODUCTS table:", err);
-            }
-        });
-        db.run(createPurchasedTable, (err) => {
-            if (err) {
-                console.log("Error creating PURCHASED table:", err);
-            }
-        });
-        db.run(createReviewTable, (err) => {
-            if (err) {
-                console.log("Error creating REVIEWS table:", err);
-            }
-        });
-        db.run(createStoreTableNew, (err) => {
-            if (err) {
-                console.log("Error creating STORES table:", err);
-    }
-});
-    });
-});
+       
