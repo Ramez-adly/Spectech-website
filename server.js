@@ -1,7 +1,7 @@
 const express = require('express');
 //const cors = require('cors');
 const server = express();
-const port = 5555;
+const port = 123;
 const db_access= require('./database.js');
 const db = db_access.db;
 //server.use(cors()); 
