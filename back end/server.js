@@ -77,10 +77,13 @@ server.get('/products', (req, res) => {
 //search for product
 server.get('/products/search', (req, res) => {
     let name = req.query.name;
-    let stock = req.query.stock;
-    let query = 'SELECT * FROM PRODUCTS WHERE stock > 0 AND name LIKE ?';
-    let params = [name];
-
+    let query = 'SELECT * FROM products WHERE stock > 0'
+    let params = [];
+    
+    if (name&& name.trim()!=='') {
+        query += ' AND name LIKE ?';
+        params.push(`%${name}%`);
+    }
     db.all(query, params, (err, rows) => {
         if (err) {
             console.log(err);
