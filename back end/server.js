@@ -1,22 +1,24 @@
 const express = require('express');
-//const cors = require('cors');
+const cors = require('cors');
+const db = require('./db.js');
 const server = express();
 const port = 5555;
-const db_access= require('./database.js');
-const db = db_access.db;
-//server.use(cors()); 
+
+server.use(cors()); 
 server.use(express.json());
 
 // User login route
 server.post('/user/login', (req, res) => {
     let email = req.body.email;
     let password = req.body.password;
+
     db.get(`SELECT * FROM USERS WHERE EMAIL = ? AND PASSWORD = ?`, [email, password], (err, row) => {
         if (err) {
             console.error(err);
             return res.status(500).send("Database error");
         }
         if (!row) {
+
             return res.status(401).send("Invalid credentials");
         }
         return res.status(200).send("Login successful");
@@ -28,7 +30,8 @@ server.post('/user/register', (req, res) => {
     let password = req.body.password;
     let email = req.body.email;
     let customertype = req.body.customertype;
-    db.run(`INSERT INTO users(name,email,password,customertype)VALUES( ?, ?, ?, ?)`, [name, email, password, customertype],
+    db.run(`INSERT INTO users(name,email,password,customertype)VALUES( ?, ?, ?, ?)`, [name, email, password, customertype], 
+
          (err) => {
             if (err) {
                 return res.status(500).send("Error during registration"+ err.message);
@@ -53,7 +56,7 @@ server.post('/store/register', (req, res) => {
     }
 
     const query = `INSERT INTO stores (storeName, storeDescription, location, phoneNumber, openingHours, deliveryAvailable) 
-                   VALUES (?, ?, ?, ?, ?, ?)` ;
+                   VALUES (?, ?, ?, ?, ?, ?)`;
     
     db.run(query, [storeName, storeDescription, location, phoneNumber, openingHours, deliveryAvailable], (err) => {
         if (err) {
@@ -62,6 +65,7 @@ server.post('/store/register', (req, res) => {
         res.status(200).send('Store registered successfully' );
         });
     });
+
 
 // Get all products route 
 server.get('/products', (req, res) => {
@@ -88,11 +92,8 @@ server.get('/products/search', (req, res) => {
         if (err) {
             console.log(err);
             return res.status(500).send(err);
-        } else {
-            return res.send(rows);
-        }
-    });
 });
+
 
 // Get all stores endpoint
 server.get('/stores', (req, res) => {
@@ -138,5 +139,8 @@ const query = `UPDATE products SET stock = ? WHERE ID = ?`;
 // Start the server 
 server.listen(port, () => {
     console.log(`Server started listening on port ${port}`);
-    
-});
+    db.serialize(() => {
+        db.run(createUserTable, (err) => {
+            if (err) {
+                console.log("Error creating USERS table:", err);
+       
