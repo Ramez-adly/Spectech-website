@@ -12,14 +12,16 @@ server.post('/user/login', (req, res) => {
     let email = req.body.email;
     let password = req.body.password;
     db.get(`SELECT * FROM USERS WHERE EMAIL = ? AND PASSWORD = ?`, [email, password], (err, row) => {
-        if (err || !row) {
-            return res.status(401).send("Invalid credentials");
-        } else {
-        return res.status(200).send("Login successful");
+        if (err) {
+            console.error(err);
+            return res.status(500).send("Database error");
         }
+        if (!row) {
+            return res.status(401).send("Invalid credentials");
+        }
+        return res.status(200).send("Login successful");
     });
 });
-
 // User registration route
 server.post('/user/register', (req, res) => {
     let name = req.body.name;
@@ -61,21 +63,6 @@ server.post('/store/register', (req, res) => {
         });
     });
 
-server.get('/products/search', (req, res) => {
-    let name = req.query.name;
-    let stock = req.query.stock;
-    let query = 'SELECT * FROM PRODUCTS WHERE stock > 0 AND name = ?'; 
-    let params = [name];
-    
-    db.all(query, params, (err, rows) => {
-        if (err) {
-            console.log(err);
-            return res.status(500).send(err);
-        } else {
-            return res.send(rows);
-        }
-    });
-});
 // Get all products route 
 server.get('/products', (req, res) => {
     const query = 'SELECT * FROM PRODUCTS';
