@@ -62,7 +62,6 @@ server.post('/store/register', (req, res) => {
         res.status(200).send('Store registered successfully' );
         });
     });
-
 // Get all products route 
 server.get('/products', (req, res) => {
     const query = 'SELECT * FROM PRODUCTS';
@@ -82,8 +81,7 @@ server.get('/products/search', (req, res) => {
     
     if (name&& name.trim()!=='') {
         query += ' AND name LIKE ?';
-        params.push(`%${name}%`);
-    }
+        params.push(`%${name}%`); }
     db.all(query, params, (err, rows) => {
         if (err) {
             console.log(err);
@@ -122,7 +120,20 @@ db.run(query, [name, stock, price, category], (err) => {
         return res.status(200).send('Product added');
     }
 });
+});  
+ 
+// Get all stores endpoint
+server.get('/stores', (req, res) => {
+const query = `SELECT * FROM stores`;
+db.all(query, (err, rows) => {
+    if (err) {
+        return res.status(500).send(err + err.message);
+    } else {
+        return res.send(rows);
+    }
 });
+});
+
 // Modify product stock by ID
 server.put(`/products/edit/:id/:stock`,(req,res)=>{
 const query = `UPDATE products SET stock = ? WHERE ID = ?`; 
@@ -138,5 +149,4 @@ const query = `UPDATE products SET stock = ? WHERE ID = ?`;
 // Start the server 
 server.listen(port, () => {
     console.log(`Server started listening on port ${port}`);
-    
 });
