@@ -29,7 +29,14 @@ const CreateProductsTable = `CREATE TABLE IF NOT EXISTS products(
     category TEXT NOT NULL,
     image_url TEXT
 )`;
-
+const CreateStoreProductTable =`CREATE TABLE IF NOT EXISTS store_products (
+    ID INTEGER PRIMARY KEY AUTOINCREMENT,
+    store_ID INT,
+    product_ID INT,
+    price DECIMAL(10, 2) NOT NULL,
+    FOREIGN KEY(store_ID) REFERENCES stores(ID) ON DELETE CASCADE,
+    FOREIGN KEY(product_ID) REFERENCES products(ID) ON DELETE CASCADE
+)`;
 const CreatePurchasedTable = `
 CREATE TABLE IF NOT EXISTS purchased(
     ID INTEGER PRIMARY KEY AUTOINCREMENT, 
@@ -77,12 +84,17 @@ db.serialize(() => {
             console.log("Error creating STORES table:", err);
         }
     });
-});
+db.run(CreateStoreProductTable, (err) => {
+    if (err) {
+        console.log("Error creating STORE_PRODUCTS table:", err);
+    }
+});});
 module.exports={
     db,
     CreateUserTable,
     CreateStoreTable,
     CreateProductsTable,
     CreatePurchasedTable,
-    CreateReviewTable
+    CreateReviewTable,
+    CreateStoreProductTable
 }
