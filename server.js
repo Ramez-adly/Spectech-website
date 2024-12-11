@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const server = express();
 const port = 5555;
+const secretKey = 'spectech';
 const db_access= require('./database.js');
 const db = db_access.db;
 const bcrypt = require('bcrypt');
@@ -13,20 +14,25 @@ server.use(cors({
     origin: 'http://localhost:3000',
     Credentials: true
 }));
+const generateToken = (id,name,email,customertype) => {
+    return token.sign({id,name,email,customertype},secretKey,{expiresin:'1h'});
+}
 
-const auth = (req, res, next) => {
-    const token = req.cookies.token;
+const verifyToken = (req, res, next) => {
+    let token = req.cookies.token;
     if (!token) {
-        return res.status(401).send("Unauthorized: no token provided");
+        return res.status(401).send("Unauthorized: no token provided login first");
     }
-    try {
-        const decoded = jwt.verify(token, 'spectech');
-        req.user = decoded;
-        next();
-    } catch (err) {
-        return res.status(401).send("Unauthorized: invalid token");
+      token.verfy(token,secretKey,(err,decoded)=>{
+        if (err) {
+            return res.status(401).send("Unauthorized: invalid token");
+        }
+        else {
+            req.user = decoded;
+            next();
+        }
+      })
     }
-};
 
 // User login route
 server.post('/user/login', (req, res) => {
@@ -52,29 +58,25 @@ server.post('/user/login', (req, res) => {
             if (!result) {
                 return res.status(401).send("Invalid password");
             }
-            const payload = {
-                userId: user.ID,
-                email: user.email,
-                customertype: user.customertype,
-                iat: Math.floor(Date.now() / 1000),
-                exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // Token expires in 24 hours
-            };
+            let userType = row.customertype;
+            let userID = row.id;
+            let username = row.name;
+            let email = row.email;
+            const generatedtoken = generatetoken(userID, userType, email, username);
+            
 
-            // Sign the JWT
-            const token = jwt.sign(payload, 'your_jwt_secret_key'); // Replace with a secure secret key
-
-            // Set the JWT as an HTTP-only cookie
-            res.cookie('token', token, {
+            res.cookie('auth', generatedtoken, {
                 httpOnly: true,
+                sameSite: 'strict',
+                maxAge: 5 * 60 * 60 * 1000
             });
-        res.status(200).json({
-            message: "Login successful",
-            user: {
-                id: user.ID,
-                email: user.email,
-                customertype: user.customertype
-            }
-        });
+
+            return res.status(200).json({
+                message: "Login successful",
+                token: generatedtoken,
+                customertype: user.customertype,
+                email: user.email
+            });
     });
 });
 });
