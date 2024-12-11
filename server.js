@@ -138,19 +138,32 @@ db.run(query, [name, stock, price, category, image_url], (err) => {
     }
 });
 });  
- 
-// Get all stores endpoint
-server.get('/stores', (req, res) => {
-const query = `SELECT * FROM stores`;
-db.all(query, (err, rows) => {
-    if (err) {
-        return res.status(500).send(err + err.message);
-    } else {
-        return res.send(rows);
-    }
-});
-});
+// Add product to store route
+server.post('/stores/:storeID/products/add', (req, res) => {
+    const storeID = req.params.storeID;
+    const  productID = req.body.productID; 
+    const price  = req.body.price; 
 
+    // Check if the product exists
+    const checkProductQuery = `SELECT * FROM products WHERE ID = ?`;
+    db.get(checkProductQuery, [productID], (err, product) => {
+        if (err) {
+            return res.status(500).send("Error checking product: " + err.message);
+        }
+        if (!product) {
+            return res.status(404).send("Product not found");
+        }
+
+        // Link the product to the store with the specified price
+        const insertQuery = `INSERT INTO store_products (store_ID, product_ID, price) VALUES (?, ?, ?)`;
+        db.run(insertQuery, [storeID, productID, price], (err) => {
+            if (err) {
+                return res.status(500).send("Error linking product to store: " + err.message);
+            }
+            res.status(200).send('Product linked to store successfully');
+        });
+    });
+});
 // Modify product stock by ID
 server.put(`/products/edit/:id/:stock`,(req,res)=>{
 const query = `UPDATE products SET stock = ? WHERE ID = ?`; 
