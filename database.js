@@ -26,7 +26,8 @@ const CreateProductsTable = `CREATE TABLE IF NOT EXISTS products(
     name TEXT NOT NULL UNIQUE,
     stock INT NOT NULL, 
     price DECIMAL(10, 2) NOT NULL,
-    category TEXT NOT NULL
+    category TEXT NOT NULL,
+    image_url TEXT
 )`;
 
 const CreatePurchasedTable = `
@@ -74,8 +75,8 @@ db.serialize(() => {
     db.run(CreateStoreTable, (err) => {
         if (err) {
             console.log("Error creating STORES table:", err);
-}
-});
+        }
+    });
 });
 module.exports={
     db,
