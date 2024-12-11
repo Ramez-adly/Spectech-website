@@ -4,6 +4,8 @@ const server = express();
 const port = 123;
 const db_access= require('./database.js');
 const db = db_access.db;
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 //server.use(cors()); 
 server.use(express.json());
 
@@ -31,8 +33,15 @@ server.post('/user/register', (req, res) => {
     let password = req.body.password;
     let email = req.body.email;
     let customertype = req.body.customertype;
+    
+    if (!name || !email || !password || !customertype) {
+        return res.status(400).send("All fields are required");
+    }
+    
+    
     bcrypt.hash(password, 10, (err, hash) => {
         if (err) {
+            console.error("Error hashing password:", err);
             return res.status(500).send("Error hashing password");
         }
     // Insert the new user into the database with the hashed password
