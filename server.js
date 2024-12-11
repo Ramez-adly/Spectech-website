@@ -1,13 +1,16 @@
 const express = require('express');
-//const cors = require('cors');
+const cors = require('cors');
 const server = express();
-const port = 123;
+const port = 5555;
 const db_access= require('./database.js');
 const db = db_access.db;
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-//server.use(cors()); 
 server.use(express.json());
+server.use(cors({
+    origin: 'http://localhost:3000',
+    Credentials: true
+}));
 
 // User login route
 server.post('/user/login', (req, res) => {
@@ -21,9 +24,7 @@ server.post('/user/login', (req, res) => {
         if (!row) {
             return res.status(401).send("Invalid credentials");
         }
-        const token = jwt.sign({ userId: row.ID }, 'spectech', { expiresIn: '1h' });
-        res.cookie('token', token, { httpOnly: true });
-
+            const token = jwt.sign({ userId: row.ID }, 'spectech', { expiresIn: '1h' });
         return res.status(200).send("Login successful");
     });
 });
@@ -33,7 +34,6 @@ server.post('/user/register', (req, res) => {
     let password = req.body.password;
     let email = req.body.email;
     let customertype = req.body.customertype;
-    
     if (!name || !email || !password || !customertype) {
         return res.status(400).send("All fields are required");
     }
