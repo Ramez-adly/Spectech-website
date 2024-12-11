@@ -6,27 +6,77 @@ const db_access= require('./database.js');
 const db = db_access.db;
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
+server.use(cookieParser());
 server.use(express.json());
 server.use(cors({
     origin: 'http://localhost:3000',
     Credentials: true
 }));
 
+const auth = (req, res, next) => {
+    const token = req.cookies.token;
+    if (!token) {
+        return res.status(401).send("Unauthorized: no token provided");
+    }
+    try {
+        const decoded = jwt.verify(token, 'spectech');
+        req.user = decoded;
+        next();
+    } catch (err) {
+        return res.status(401).send("Unauthorized: invalid token");
+    }
+};
+
 // User login route
 server.post('/user/login', (req, res) => {
-    let email = req.body.email;
-    let password = req.body.password;
-    db.get(`SELECT * FROM USERS WHERE EMAIL = ? AND PASSWORD = ?`, [email, password], (err, row) => {
+    const { email, password } = req.body;
+
+    // First, find the user by email
+    db.get('SELECT * FROM users WHERE email = ?', [email], (err, user) => {
         if (err) {
             console.error(err);
-            return res.status(500).send("Database error");
+            return res.status(500).send("Error during login");
         }
-        if (!row) {
-            return res.status(401).send("Invalid credentials");
+
+        if (!user) {
+            return res.status(401).send("User not found");
         }
-            const token = jwt.sign({ userId: row.ID }, 'spectech', { expiresIn: '1h' });
-        return res.status(200).send("Login successful");
+
+        bcrypt.compare(password, user.password, (err, result) => {
+            if (err) {
+                console.error(err);
+                return res.status(500).send("Error comparing passwords");
+            }
+
+            if (!result) {
+                return res.status(401).send("Invalid password");
+            }
+            const payload = {
+                userId: user.ID,
+                email: user.email,
+                customertype: user.customertype,
+                iat: Math.floor(Date.now() / 1000),
+                exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // Token expires in 24 hours
+            };
+
+            // Sign the JWT
+            const token = jwt.sign(payload, 'your_jwt_secret_key'); // Replace with a secure secret key
+
+            // Set the JWT as an HTTP-only cookie
+            res.cookie('token', token, {
+                httpOnly: true,
+            });
+        res.status(200).json({
+            message: "Login successful",
+            user: {
+                id: user.ID,
+                email: user.email,
+                customertype: user.customertype
+            }
+        });
     });
+});
 });
 // User registration route
 server.post('/user/register', (req, res) => {
