@@ -10,29 +10,75 @@ const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 server.use(cookieParser());
 server.use(express.json());
+
 server.use(cors({
     origin: 'http://localhost:3000',
-    Credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
 }));
-const generateToken = (id,name,email,customertype) => {
-    return token.sign({id,name,email,customertype},secretKey,{expiresin:'1h'});
+
+// Add headers middleware
+server.use((req, res, next) => {
+    res.header('Access-Control-Allow-Credentials', 'true');
+    next();
+});
+
+const generateToken = (id, name, email, customertype) => {
+    return jwt.sign({ id, name, email, customertype }, secretKey, { expiresIn: '1h' });
 }
 
 const verifyToken = (req, res, next) => {
-    let token = req.cookies.token;
+    const token = req.cookies.auth;
     if (!token) {
         return res.status(401).send("Unauthorized: no token provided login first");
     }
-      token.verfy(token,secretKey,(err,decoded)=>{
+    
+    jwt.verify(token, secretKey, (err, decoded) => {
         if (err) {
             return res.status(401).send("Unauthorized: invalid token");
         }
-        else {
-            req.user = decoded;
-            next();
-        }
-    })
+        req.user = decoded;
+        next();
+    });
 }
+
+// Check authentication status
+server.get('/check-auth', (req, res) => {
+    const token = req.cookies.auth;
+    
+    if (!token) {
+        return res.json({ 
+            authenticated: false,
+            message: "No token found"
+        });
+    }
+
+    jwt.verify(token, secretKey, (err, decoded) => {
+        if (err) {
+            return res.json({ 
+                authenticated: false,
+                message: "Invalid token"
+            });
+        }
+
+        return res.json({
+            authenticated: true,
+            customertype: decoded.customertype,
+            email: decoded.email,
+            name: decoded.name
+        });
+    });
+});
+
+// Logout route
+server.post('/logout', (req, res) => {
+    res.clearCookie('auth', {
+        httpOnly: true,
+        sameSite: 'strict'
+    });
+    res.json({ message: 'Logged out successfully' });
+});
 
 // User login route
 server.post('/user/login', (req, res) => {
@@ -161,7 +207,26 @@ server.get('/products/search', (req, res) => {
         }
     });
 });
-
+// Get stores that sell a specific 
+server.get('/products/:productId/stores', (req, res) => {
+    const productId = req.params.productId;
+    let query = `
+        SELECT s.ID as storeId, s.storeName, s.location, s.deliveryAvailable, sp.price 
+        FROM stores s 
+        INNER JOIN store_products sp ON s.ID = sp.store_ID 
+        WHERE sp.product_ID = ?
+    `;
+    let params = [productId];
+    
+    db.all(query, params, (err, rows) => {
+        if (err) {
+            console.log(err);
+            return res.status(500).send(err);
+        } else {
+            return res.send(rows);
+        }
+    });
+});
 // Get all stores endpoint
 server.get('/stores', (req, res) => {
 const query = `SELECT * FROM stores`;
@@ -231,9 +296,10 @@ const query = `UPDATE products SET stock = ? WHERE ID = ?`;
  });
 }); 
 // Purchase route
-server.put('/purchase', (req, res) => {
-    let productID = req.body.productID
-    let quantity = req.body.quantity
+server.put('/purchase', verifyToken, (req, res) => {
+    const productID = req.body.productID;
+    const quantity = req.body.quantity;
+    const userID = req.user.id; // Get user ID from verified token
     
     // Query to get the product by ID and ensure there is enough stock
     const query = `SELECT * FROM products WHERE ID = ? AND stock >= ?`;
@@ -249,16 +315,16 @@ server.put('/purchase', (req, res) => {
         
         // Calculate the total price
         const totalPrice = row.price * quantity;
-        const insertPurchaseQuery = `INSERT INTO purchased (user_ID, products_ID, quantity, TotalPrice) 
+        const insertPurchaseQuery = `INSERT INTO purchased (user_ID, product_ID, quantity, TotalPrice) 
                                      VALUES (?, ?, ?, ?)`;
         
-        db.run(insertPurchaseQuery, [user_ID, productID, quantity, totalPrice], (err) => {
+        db.run(insertPurchaseQuery, [userID, productID, quantity, totalPrice], (err) => {
             if (err) {
-        console.log(err);
+                console.log(err);
                 return res.status(500).send("Error logging purchase");
             }
 
-            // Update the  stock after purchase
+            // Update the stock after purchase
             const updateStockQuery = `UPDATE products SET stock = stock - ? WHERE ID = ?`;
             db.run(updateStockQuery, [quantity, productID], (err) => {
                 if (err) {
