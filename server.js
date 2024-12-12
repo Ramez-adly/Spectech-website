@@ -43,6 +43,15 @@ const verifyToken = (req, res, next) => {
     });
 }
 
+// Admin middleware
+const isAdmin = (req, res, next) => {
+    if (req.user && req.user.customertype === 'admin') {
+        next();
+    } else {
+        res.status(403).send('Access denied: Admin privileges required');
+    }
+};
+
 // Check authentication status
 server.get('/check-auth', (req, res) => {
     const token = req.cookies.auth;
@@ -189,6 +198,23 @@ server.get('/products', (req, res) => {
         }
     });
 });
+
+// Get product by ID endpoint
+server.get('/products/:id', (req, res) => {
+    const productId = req.params.id;
+    const query = `SELECT * FROM products WHERE ID = ?`;
+    
+    db.get(query, [productId], (err, row) => {
+        if (err) {
+            return res.status(500).json({ error: 'Database error', details: err.message });
+        }
+        if (!row) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+        return res.json(row);
+    });
+});
+
 //search for product
 server.get('/products/search', (req, res) => {
     let name = req.query.name;
@@ -207,7 +233,7 @@ server.get('/products/search', (req, res) => {
         }
     });
 });
-// Get stores that sell a specific 
+// Get stores that sell a specific  product
 server.get('/products/:productId/stores', (req, res) => {
     const productId = req.params.productId;
     let query = `
@@ -222,6 +248,18 @@ server.get('/products/:productId/stores', (req, res) => {
         if (err) {
             console.log(err);
             return res.status(500).send(err);
+        } else {
+            return res.send(rows);
+        }
+    });
+});
+// Get all stores endpoint
+server.get('/users', (req, res) => {
+    const query = `SELECT * FROM users`;
+    
+    db.all(query, (err, rows) => {
+        if (err) {
+            return res.status(500).send(err + err.message);
         } else {
             return res.send(rows);
         }
@@ -310,7 +348,10 @@ server.put('/purchase', verifyToken, (req, res) => {
             return res.status(500).send(err);
         }
         if (!row) {
-            return res.status(404).send('Product not available in sufficient stock');
+            return res.status(404).send('Product not found');
+        }
+        if (req.user.customertype !== 'customer') {
+            return res.status(403).send('Only customers can make purchases');
         }
         
         // Calculate the total price
@@ -336,6 +377,7 @@ server.put('/purchase', verifyToken, (req, res) => {
         });
     });
 });
+
 //// review routes for adding deleting reviews
 //add review with conditions
 server.post('/reviews/product/:productId', (req, res) => {
@@ -379,6 +421,50 @@ server.post('/reviews/product/:productId', (req, res) => {
         });
     });
 });
+
+// route  for deletion
+server.delete('/admin/users/:id', verifyToken, isAdmin, (req, res) => {
+    const userID = req.params.id;
+    
+    db.run('DELETE FROM users WHERE ID = ?', [userID], function(err) {
+        if (err) {
+            return res.status(500).json({ error: 'Failed to delete user', details: err.message });
+        }
+        if (this.changes === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        res.json({ message: 'User deleted successfully' });
+    });
+});
+
+server.delete('/admin/stores/:id', verifyToken, isAdmin, (req, res) => {
+    const storeID = req.params.id;
+    
+    db.run('DELETE FROM stores WHERE ID = ?', [storeID], function(err) {
+        if (err) {
+            return res.status(500).json({ error: 'Failed to delete store', details: err.message });
+        }
+        if (this.changes === 0) {
+            return res.status(404).json({ error: 'Store not found' });
+        }
+        res.json({ message: 'Store deleted successfully' });
+    });
+});
+
+server.delete('/admin/products/:id', verifyToken, isAdmin, (req, res) => {
+    const productID = req.params.id;
+    
+    db.run('DELETE FROM products WHERE ID = ?', [productID], function(err) {
+        if (err) {
+            return res.status(500).json({ error: 'Failed to delete product', details: err.message });
+        }
+        if (this.changes === 0) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+        res.json({ message: 'Product deleted successfully' });
+    });
+});
+
 // Start the server 
 server.listen(port, () => {
     console.log(`Server started listening on port ${port}`);
