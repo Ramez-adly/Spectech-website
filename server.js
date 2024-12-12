@@ -10,57 +10,29 @@ const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 server.use(cookieParser());
 server.use(express.json());
-
 server.use(cors({
     origin: 'http://localhost:3000',
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
-    exposedHeaders: ['Set-Cookie'],
-
+    Credentials: true
 }));
-
-server.use((req, res, next) => {
-    res.header('Access-Control-Allow-Credentials', 'true');
-    next();
-});
-
 const generateToken = (id,name,email,customertype) => {
-    return jwt.sign({id,name,email,customertype},secretKey,{expiresIn: '1h'});
+    return token.sign({id,name,email,customertype},secretKey,{expiresin:'1h'});
 }
 
-server.get('/check-auth', (req, res) => {
-    const token = req.cookies.auth;
-    console.log('Checking auth, cookies:', req.cookies);  // Debug log
-    
+const verifyToken = (req, res, next) => {
+    let token = req.cookies.token;
     if (!token) {
-        console.log('No token found');  // Debug log
-        return res.json({ 
-            authenticated: false,
-            message: "No token found"
-        });
+        return res.status(401).send("Unauthorized: no token provided login first");
     }
-
-    jwt.verify(token, secretKey, (err, decoded) => {
+      token.verfy(token,secretKey,(err,decoded)=>{
         if (err) {
-            console.log('Token verification failed:', err);  // Debug log
-            return res.json({ 
-                authenticated: false,
-                message: "Invalid token"
-            });
+            return res.status(401).send("Unauthorized: invalid token");
         }
-
-        console.log('Token verified, user:', decoded);  // Debug log
-        return res.json({
-            authenticated: true,
-            customertype: decoded.customertype,
-            email: decoded.email,
-            name: decoded.name
-        });
-    });
-});
-
-
+        else {
+            req.user = decoded;
+            next();
+        }
+    })
+}
 
 // User login route
 server.post('/user/login', (req, res) => {
@@ -101,21 +73,13 @@ server.post('/user/login', (req, res) => {
             });
 
             return res.status(200).json({
-                success: true,
                 message: "Login successful",
-                user: {
-                    customertype: user.customertype,
-                    email: user.email,
-                    name: user.name
-                }
+                token: generatedToken,
+                customertype: user.customertype,
+                email: user.email
             });
         });
     });
-});
-// Logout route 
-server.post('/logout', (req, res) => {
-    res.clearCookie('auth');
-    res.json({ message: 'Logged out successfully' });
 });
 
 // User registration route
