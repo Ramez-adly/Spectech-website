@@ -10,14 +10,21 @@ const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 server.use(cookieParser());
 server.use(express.json());
+
 server.use(cors({
     origin: 'http://localhost:3000',
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    exposedHeaders: ['Set-Cookie']
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+    exposedHeaders: ['Set-Cookie'],
 
 }));
+
+server.use((req, res, next) => {
+    res.header('Access-Control-Allow-Credentials', 'true');
+    next();
+});
+
 const generateToken = (id,name,email,customertype) => {
     return jwt.sign({id,name,email,customertype},secretKey,{expiresIn: '1h'});
 }
@@ -94,15 +101,17 @@ server.post('/user/login', (req, res) => {
             });
 
             return res.status(200).json({
+                success: true,
                 message: "Login successful",
-                token: generatedToken,
-                customertype: user.customertype,
-                email: user.email
+                user: {
+                    customertype: user.customertype,
+                    email: user.email,
+                    name: user.name
+                }
             });
+        });
     });
 });
-});
-
 // Logout route 
 server.post('/logout', (req, res) => {
     res.clearCookie('auth');
@@ -279,7 +288,7 @@ server.put('/purchase', (req, res) => {
         const insertPurchaseQuery = `INSERT INTO purchased (user_ID, products_ID, quantity, TotalPrice) 
                                      VALUES (?, ?, ?, ?)`;
         
-        db.run(insertPurchaseQuery, [req.user.id, productID, quantity, totalPrice], (err) => {
+        db.run(insertPurchaseQuery, [user_ID, productID, quantity, totalPrice], (err) => {
             if (err) {
         console.log(err);
                 return res.status(500).send("Error logging purchase");
@@ -338,14 +347,6 @@ server.post('/reviews/product/:productId', (req, res) => {
                 return res.status(200).send('Review added successfully');
             });
         });
-    });
-});
-server.get('/check-auth', verifyToken, (req, res) => {
-    return res.json({
-        authenticated: true,
-        customertype: req.user.customertype,
-        email: req.user.email,
-        name: req.user.name
     });
 });
 // Start the server 
