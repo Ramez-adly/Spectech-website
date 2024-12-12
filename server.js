@@ -137,32 +137,52 @@ server.post('/user/login', (req, res) => {
     });
 });
 
-// User registration route
 server.post('/user/register', (req, res) => {
     let name = req.body.name;
     let password = req.body.password;
     let email = req.body.email;
     let customertype = req.body.customertype;
+    
     if (!name || !email || !password || !customertype) {
-        return res.status(400).send("All fields are required");
+        return res.status(400).json({ error: "All fields are required" });
     }
-    
-    
-    bcrypt.hash(password, 10, (err, hash) => {
+
+    // First check if email already exists
+    db.get('SELECT email FROM users WHERE email = ?', [email], (err, row) => {
         if (err) {
-            console.error("Error hashing password:", err);
-            return res.status(500).send("Error hashing password");
+            return res.status(500).json({ error: "Error checking email: " + err.message });
         }
-    // Insert the new user into the database with the hashed password
-    db.run(`INSERT INTO users (name, email, password, customertype) VALUES (?, ?, ?, ?)`, 
-        [name, email, hash, customertype], 
-        (err) => {
+        if (row) {
+            return res.status(400).json({ error: "Email already registered" });
+        }
+
+        // If email doesn't exist, proceed with registration
+        bcrypt.hash(password, 10, (err, hash) => {
             if (err) {
-                return res.status(500).send("Error during registration: " + err.message);
+                console.error("Error hashing password:", err);
+                return res.status(500).json({ error: "Error hashing password" });
             }
-            return res.status(200).send("Registration successful");
+            
+            db.run(`INSERT INTO users (name, email, password, customertype) VALUES (?, ?, ?, ?)`, 
+                [name, email, hash, customertype], 
+                function(err) {
+                    if (err) {
+                        return res.status(500).json({ error: "Error during registration: " + err.message });
+                    }
+                    
+                    // Get the newly created user
+                    db.get('SELECT ID, customertype FROM users WHERE email = ?', [email], (err, user) => {
+                        if (err) {
+                            return res.status(500).json({ error: "Error retrieving user data" });
+                        }
+                        return res.status(200).json({ 
+                            message: "Registration successful",
+                            user: user
+                        });
+                    });
+                });
         });
-});
+    });
 });
 
 // Store registration route
@@ -173,20 +193,48 @@ server.post('/store/register', (req, res) => {
     let phoneNumber = req.body.phoneNumber;
     let openingHours = req.body.openingHours;
     let deliveryAvailable = req.body.deliveryAvailable;
-    if (!storeName || !location || !phoneNumber) {
-        return res.status(400).send( "Missing required fields" );
+    const userId = req.body.userId;  // Changed to get from request body
+     
+    if (!userId) {
+        return res.status(400).json({ error: 'User ID is required' });
     }
 
-    const query = `INSERT INTO stores (storeName, storeDescription, location, phoneNumber, openingHours, deliveryAvailable) 
-                   VALUES (?, ?, ?, ?, ?, ?)` ;
-    
-    db.run(query, [storeName, storeDescription, location, phoneNumber, openingHours, deliveryAvailable], (err) => {
+    if (!storeName || !location || !phoneNumber) {
+        return res.status(400).send("Missing required fields");
+    }
+
+    // Check if this user is registered as a store type
+    db.get('SELECT customertype FROM users WHERE ID = ?', [userId], (err, user) => {
         if (err) {
-            return res.status(500).send({ error: err.message });
+            return res.status(500).json({ error: 'Database error', details: err.message });
         }
-        res.status(200).send('Store registered successfully' );
+        
+        if (!user || user.customertype !== 'store') {
+            return res.status(403).json({ error: 'Only store accounts can register stores' });
+        }
+
+        const query = `INSERT INTO stores (user_ID, storeName, storeDescription, location, phoneNumber, openingHours, deliveryAvailable) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?)`;
+        
+        db.run(query, [
+            userId,
+            storeName, 
+            storeDescription, 
+            location, 
+            phoneNumber, 
+            openingHours, 
+            deliveryAvailable
+        ], function(err) {
+            if (err) {
+                return res.status(500).json({ error: 'Failed to register store', details: err.message });
+            }
+            res.status(201).json({
+                message: 'Store registered successfully',
+                storeId: this.lastID
+            });
         });
     });
+});
 // Get all products route 
 server.get('/products', (req, res) => {
     const query = 'SELECT * FROM PRODUCTS';
