@@ -14,31 +14,46 @@ server.use(cors({
     origin: 'http://localhost:3000',
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    exposedHeaders: ['Set-Cookie']
+
 }));
 const generateToken = (id,name,email,customertype) => {
     return jwt.sign({id,name,email,customertype},secretKey,{expiresIn: '1h'});
 }
 
-const verifyToken = (req, res, next) => {
-    let token = req.cookies.auth;
+server.get('/check-auth', (req, res) => {
+    const token = req.cookies.auth;
+    console.log('Checking auth, cookies:', req.cookies);  // Debug log
+    
     if (!token) {
-        return res.status(401).json({ 
+        console.log('No token found');  // Debug log
+        return res.json({ 
             authenticated: false,
-            message: "No token provided"
+            message: "No token found"
         });
     }
+
     jwt.verify(token, secretKey, (err, decoded) => {
         if (err) {
-            return res.status(401).json({ 
+            console.log('Token verification failed:', err);  // Debug log
+            return res.json({ 
                 authenticated: false,
                 message: "Invalid token"
             });
         }
-        req.user = decoded;
-        next();
+
+        console.log('Token verified, user:', decoded);  // Debug log
+        return res.json({
+            authenticated: true,
+            customertype: decoded.customertype,
+            email: decoded.email,
+            name: decoded.name
+        });
     });
-}
+});
+
+
 
 // User login route
 server.post('/user/login', (req, res) => {
