@@ -12,27 +12,33 @@ server.use(cookieParser());
 server.use(express.json());
 server.use(cors({
     origin: 'http://localhost:3000',
-    Credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 const generateToken = (id,name,email,customertype) => {
-    return token.sign({id,name,email,customertype},secretKey,{expiresin:'1h'});
+    return jwt.sign({id,name,email,customertype},secretKey,{expiresIn: '1h'});
 }
 
 const verifyToken = (req, res, next) => {
-    let token = req.cookies.token;
+    let token = req.cookies.auth;
     if (!token) {
-        return res.status(401).send("Unauthorized: no token provided login first");
+        return res.status(401).json({ 
+            authenticated: false,
+            message: "No token provided"
+        });
     }
-      token.verfy(token,secretKey,(err,decoded)=>{
+    jwt.verify(token, secretKey, (err, decoded) => {
         if (err) {
-            return res.status(401).send("Unauthorized: invalid token");
+            return res.status(401).json({ 
+                authenticated: false,
+                message: "Invalid token"
+            });
         }
-        else {
-            req.user = decoded;
-            next();
-        }
-      })
-    }
+        req.user = decoded;
+        next();
+    });
+}
 
 // User login route
 server.post('/user/login', (req, res) => {
@@ -58,14 +64,15 @@ server.post('/user/login', (req, res) => {
             if (!result) {
                 return res.status(401).send("Invalid password");
             }
-            let userType = row.customertype;
-            let userID = row.id;
-            let username = row.name;
-            let email = row.email;
-            const generatedtoken = generatetoken(userID, userType, email, username);
-            
 
-            res.cookie('auth', generatedtoken, {
+            const generatedToken = generateToken(
+                user.ID,
+                user.name,
+                user.email,
+                user.customertype
+            );
+
+            res.cookie('auth', generatedToken, {
                 httpOnly: true,
                 sameSite: 'strict',
                 maxAge: 5 * 60 * 60 * 1000
@@ -73,13 +80,20 @@ server.post('/user/login', (req, res) => {
 
             return res.status(200).json({
                 message: "Login successful",
-                token: generatedtoken,
+                token: generatedToken,
                 customertype: user.customertype,
                 email: user.email
             });
     });
 });
 });
+
+// Logout route 
+server.post('/logout', (req, res) => {
+    res.clearCookie('auth');
+    res.json({ message: 'Logged out successfully' });
+});
+
 // User registration route
 server.post('/user/register', (req, res) => {
     let name = req.body.name;
@@ -250,7 +264,7 @@ server.put('/purchase', (req, res) => {
         const insertPurchaseQuery = `INSERT INTO purchased (user_ID, products_ID, quantity, TotalPrice) 
                                      VALUES (?, ?, ?, ?)`;
         
-        db.run(insertPurchaseQuery, [user_ID, productID, quantity, totalPrice], (err) => {
+        db.run(insertPurchaseQuery, [req.user.id, productID, quantity, totalPrice], (err) => {
             if (err) {
         console.log(err);
                 return res.status(500).send("Error logging purchase");
@@ -311,9 +325,15 @@ server.post('/reviews/product/:productId', (req, res) => {
         });
     });
 });
-
+server.get('/check-auth', verifyToken, (req, res) => {
+    return res.json({
+        authenticated: true,
+        customertype: req.user.customertype,
+        email: req.user.email,
+        name: req.user.name
+    });
+});
 // Start the server 
 server.listen(port, () => {
     console.log(`Server started listening on port ${port}`);
 });
-
