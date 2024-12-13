@@ -26,7 +26,7 @@ server.use((req, res, next) => {
     next();
 });
 
-/************************* AUTHENTICATION UTILITIES *************************/
+/************************* AUTHENTICATION FUNCTIONS *************************/
 const generateToken = (id, name, email, customertype) => {
     return jwt.sign({ id, name, email, customertype }, secretKey, { expiresIn: '1h' });
 }
@@ -77,6 +77,7 @@ server.get('/check-auth', (req, res) => {
             authenticated: true,
             customertype: decoded.customertype,
             email: decoded.email,
+            ID: decoded.id,  
             name: decoded.name
         });
     });
@@ -175,7 +176,17 @@ server.post('/logout', (req, res) => {
     });
     res.json({ message: 'Logged out successfully' });
 });
-
+// In your backend server.js
+server.get('/user', (req, res) => {
+    if (req.session.user) {
+        res.json({
+            ID: req.session.user.ID,
+            // other user data...
+        });
+    } else {
+        res.status(401).json({ error: 'Not authenticated' });
+    }
+});
 /************************* USER MANAGEMENT ROUTES *************************/
 // Get all users
 server.get('/users', (req, res) => {
@@ -487,18 +498,32 @@ server.put('/purchase', verifyToken, (req, res) => {
 /************************* REVIEW ROUTES *************************/
 // Add review
 server.post('/reviews/product/:productId', (req, res) => {
+    console.log('Full request body:', req.body);
     const userId = req.body.userId;
     const rating = req.body.rating;
     const comment = req.body.comment;
     const productId = req.params.productId;
 
+    console.log('Checking user ID:', userId);
+
+    // Use exact column names from your database
     const checkCustomerTypeQuery = `SELECT customertype FROM users WHERE ID = ?`;
+    console.log('Running SQL query:', checkCustomerTypeQuery, 'with ID:', userId);
     db.get(checkCustomerTypeQuery, [userId], (err, user) => {
+        
         if (err) {
+            console.error('Database error:', err);
             return res.status(500).json({ error: 'Database error', details: err.message });
         }
         
-        if (!user || user.customertype !== 'customer') {
+        if (!user) {
+            return res.status(403).json({ error: 'User not found' });
+        }
+
+       
+
+        // Make sure the comparison matches exactly what's in your database
+        if (user.customertype !== 'customer') {
             return res.status(403).json({ error: 'Only customers can write reviews' });
         }
 
@@ -512,8 +537,7 @@ server.post('/reviews/product/:productId', (req, res) => {
                 return res.status(403).json({ error: 'You must purchase the product before reviewing it' });
             }
 
-            const insertReviewQuery = `INSERT INTO reviews (user_ID, product_ID, rating, comment) VALUES (?, ?, ?, ?)`;
-            db.run(insertReviewQuery, [userId, productId, rating, comment], function(err) {
+            const insertReviewQuery = `INSERT INTO reviews (userID, productID, rating, comment) VALUES (?, ?, ?, ?)`;            db.run(insertReviewQuery, [userId, productId, rating, comment], function(err) {
                 if (err) {
                     return res.status(500).json({ error: 'Error adding review', details: err.message });
                 }
@@ -532,8 +556,8 @@ server.get('/products/:productId/reviews', (req, res) => {
     const query = `
         SELECT r.*, u.name as userName
         FROM reviews r
-        JOIN users u ON r.user_ID = u.ID
-        WHERE r.product_ID = ?
+        JOIN users u ON r.userID = u.ID
+        WHERE r.productID = ?
     `;
     
     db.all(query, [productId], (err, rows) => {
