@@ -248,7 +248,35 @@ server.get('/stores', (req, res) => {
         }
     });
 });
+// Fetch store information for the authenticated user
+server.get('/stores/user', verifyToken, (req, res) => {
+    const userID = req.user.id; // Get the authenticated user's ID
 
+    // Query to fetch the store associated with the user
+    const query = `SELECT * FROM stores WHERE user_ID = ?`;
+    
+    db.get(query, [userID], (err, row) => {
+        if (err) {
+            console.log(err);
+            return res.status(500).send('Error fetching store information');
+        }
+        if (!row) {
+            return res.status(404).send('Store not found');
+        }
+
+        // Send the store information as a response
+        res.status(200).json({
+            storeId: row.ID,
+            storeName: row.storeName,
+            storeDescription: row.storeDescription,
+            location: row.location,
+            phoneNumber: row.phoneNumber,
+            openingHours: row.openingHours,
+            deliveryAvailable: row.deliveryAvailable,
+            rating: row.rating
+        });
+    });
+});
 // Add product to store
 server.post('/stores/:storeId/products/add', verifyToken, (req, res) => {
     const storeID = req.params.storeId;
@@ -290,7 +318,28 @@ server.post('/stores/:storeId/products/add', verifyToken, (req, res) => {
         });
     });
 });
+// Fetch products for a specific store
+server.get('/stores/:storeId/products', verifyToken, (req, res) => {
+    const storeId = req.params.storeId; // Get the store ID from the request parameters
 
+    // Query to fetch products associated with the store ID
+    const query = `SELECT p.*, sp.price AS store_price FROM products p
+                   JOIN store_products sp ON p.ID = sp.product_ID
+                   WHERE sp.store_ID = ?`;
+
+    db.all(query, [storeId], (err, rows) => {
+        if (err) {
+            console.log(err);
+            return res.status(500).send('Error fetching products');
+        }
+        if (rows.length === 0) {
+            return res.status(404).send('No products found for this store');
+        }
+
+        // Send the products as a response
+        res.status(200).json(rows);
+    });
+});
 /************************* PRODUCT MANAGEMENT ROUTES *************************/
 // Get all products
 server.get('/products', (req, res) => {
@@ -492,6 +541,55 @@ server.get('/products/:productId/reviews', (req, res) => {
             return res.status(500).json({ error: 'Database error', details: err.message });
         }
         res.json(rows);
+    });
+});
+/************************* deleteROUTES *************************/
+server.delete('/stores/:storeId/products/:productId', verifyToken, (req, res) => {
+    const storeId = req.params.storeId;
+    const productId = req.params.productId;
+
+    // First check if the store exists and if the user has permission
+    const checkStoreQuery = 'SELECT user_ID FROM stores WHERE ID = ?';
+    db.get(checkStoreQuery, [storeId], (err, store) => {
+        if (err) {
+            return res.status(500).json({ error: 'Database error', details: err.message });
+        }
+        if (!store) {
+            return res.status(404).json({ error: 'Store not found' });
+        }
+        
+        // Check if user owns the store or is admin
+        if (store.user_ID !== req.user.id && req.user.customertype !== 'admin') {
+            return res.status(403).json({ error: 'Unauthorized to modify this store' });
+        }
+
+        // Delete the product from store_products
+        const deleteQuery = 'DELETE FROM store_products WHERE store_ID = ? AND product_ID = ?';
+        db.run(deleteQuery, [storeId, productId], function(err) {
+            if (err) {
+                return res.status(500).json({ error: 'Database error', details: err.message });
+            }
+            if (this.changes === 0) {
+                return res.status(404).json({ error: 'Product not found in store' });
+            }
+            res.json({ message: 'Product removed from store successfully' });
+        });
+    });
+});
+// Delete user
+server.delete('/admin/users/:userId', verifyToken, isAdmin, (req, res) => {
+    const userId = req.params.userId;
+
+    // Check if user exists and delete them
+    const deleteQuery = 'DELETE FROM users WHERE ID = ?';
+    db.run(deleteQuery, [userId], function(err) {
+        if (err) {
+            return res.status(500).json({ error: 'Database error', details: err.message });
+        }
+        if (this.changes === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        res.json({ message: 'User deleted successfully' });
     });
 });
 
