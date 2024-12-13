@@ -12,13 +12,15 @@ const CreateUserTable = `CREATE TABLE IF NOT EXISTS users(
 
 const CreateStoreTable = `CREATE TABLE IF NOT EXISTS stores(
     ID INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_ID INTEGER NOT NULL,
     storeName TEXT NOT NULL,
     storeDescription TEXT,
     location TEXT NOT NULL,
     phoneNumber TEXT NOT NULL,
     openingHours TEXT,
     deliveryAvailable BOOLEAN,
-    rating DECIMAL(3,2) DEFAULT 0
+    rating DECIMAL(3,2) DEFAULT 0,
+    FOREIGN KEY(user_ID) REFERENCES users(ID) ON DELETE CASCADE
 )`;
 
 const CreateProductsTable = `CREATE TABLE IF NOT EXISTS products(
