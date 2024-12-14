@@ -35,6 +35,7 @@ const CreateStoreProductTable =`CREATE TABLE IF NOT EXISTS store_products (
     ID INTEGER PRIMARY KEY AUTOINCREMENT,
     store_ID INT,
     product_ID INT,
+    stock INT NOT NULL DEFAULT 0,
     price DECIMAL(10, 2) NOT NULL,
     FOREIGN KEY(store_ID) REFERENCES stores(ID) ON DELETE CASCADE,
     FOREIGN KEY(product_ID) REFERENCES products(ID) ON DELETE CASCADE

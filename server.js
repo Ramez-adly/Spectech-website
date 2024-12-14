@@ -26,7 +26,7 @@ server.use((req, res, next) => {
     next();
 });
 
-/************************* AUTHENTICATION UTILITIES *************************/
+/************************* AUTHENTICATION FUNCTIONS *************************/
 const generateToken = (id, name, email, customertype) => {
     return jwt.sign({ id, name, email, customertype }, secretKey, { expiresIn: '1h' });
 }
@@ -76,12 +76,44 @@ server.get('/check-auth', (req, res) => {
         return res.json({
             authenticated: true,
             customertype: decoded.customertype,
-            email: decoded.email,
-            name: decoded.name
+            ID: decoded.id,  
         });
     });
 });
+const verifyStoreOwner = (req, res, next) => {
+    const storeId = req.params.storeId;
+    const userId = req.user.id;
 
+    db.get(
+        'SELECT * FROM stores WHERE ID = ? AND user_ID = ?',
+        [storeId, userId],
+        (err, store) => {
+            if (err) {
+                return res.status(500).json({ 
+                    message: 'Error verifying store ownership',
+                    error: err.message 
+                });
+            }
+
+            if (!store) {
+                return res.status(403).json({ 
+                    message: 'Unauthorized: You do not own this store' 
+                });
+            }
+
+            next();
+        }
+    );
+};
+const authenticateToken = (req, res, next) => {
+    const token = req.cookies.auth;
+    
+    if (!token) {
+        return res.status(401).json({ 
+            message: "Authentication required" 
+        });
+    }
+}
 // User registration route
 server.post('/users/register', (req, res) => {
     let name = req.body.name;
@@ -175,7 +207,17 @@ server.post('/logout', (req, res) => {
     });
     res.json({ message: 'Logged out successfully' });
 });
-
+// In your backend server.js
+server.get('/user', (req, res) => {
+    if (req.session.user) {
+        res.json({
+            ID: req.session.user.ID,
+            // other user data...
+        });
+    } else {
+        res.status(401).json({ error: 'Not authenticated' });
+    }
+});
 /************************* USER MANAGEMENT ROUTES *************************/
 // Get all users
 server.get('/users', (req, res) => {
@@ -340,6 +382,7 @@ server.get('/stores/:storeId/products', verifyToken, (req, res) => {
         res.status(200).json(rows);
     });
 });
+
 /************************* PRODUCT MANAGEMENT ROUTES *************************/
 // Get all products
 server.get('/products', (req, res) => {
@@ -441,6 +484,97 @@ server.put(`/products/edit/:id/:stock`, (req, res) => {
     });
 }); 
 
+// GET endpoint to fetch store products with their stock
+server.get('/stores/:storeId/products', authenticateToken, (req, res) => {
+    const storeId = req.params.storeId;
+
+    // First verify if the user owns this store
+    db.get(
+        'SELECT * FROM stores WHERE ID = ? AND user_ID = ?',
+        [storeId, req.user.id],
+        (err, store) => {
+            if (err) {
+                console.error('Error verifying store ownership:', err);
+                return res.status(500).json({
+                    message: 'Error verifying store ownership',
+                    error: err.message
+                });
+            }
+
+            if (!store) {
+                return res.status(403).json({
+                    message: 'Unauthorized: You do not own this store'
+                });
+            }
+
+            // If authorized, fetch the store products with their details
+            const query = `
+                SELECT 
+                    p.ID,
+                    p.name,
+                    p.category,
+                    p.image_url,
+                    sp.price as store_price,
+                    sp.stock,
+                    sp.ID as store_product_id
+                FROM products p
+                JOIN store_products sp ON p.ID = sp.product_ID
+                WHERE sp.store_ID = ?
+            `;
+
+            db.all(query, [storeId], (err, products) => {
+                if (err) {
+                    console.error('Error fetching store products:', err);
+                    return res.status(500).json({
+                        message: 'Error fetching store products',
+                        error: err.message
+                    });
+                }
+
+                res.json(products);
+            });
+        }
+    );
+});
+// PUT endpoint to update product stock for a specific store
+server.put('/stores/:storeId/products/:productId/stock/:newStock', async (req, res) => {
+    const { storeId, productId, newStock } = req.params;
+    
+    // Validate newStock is a positive number
+    const stockValue = parseInt(newStock);
+    if (isNaN(stockValue) || stockValue < 0) {
+        return res.status(400).json({
+            message: 'Invalid stock value. Must be a non-negative number.'
+        });
+    }
+
+    db.run(
+        'UPDATE store_products SET stock = ? WHERE store_ID = ? AND product_ID = ?',
+        [stockValue, storeId, productId],
+        function(err) {
+            if (err) {
+                console.error('Error updating stock:', err);
+                return res.status(500).json({ 
+                    message: 'Error updating stock',
+                    error: err.message 
+                });
+            }
+
+            if (this.changes === 0) {
+                return res.status(404).json({ 
+                    message: 'Product not found in store' 
+                });
+            }
+
+            res.status(200).json({ 
+                message: 'Stock updated successfully',
+                storeId,
+                productId,
+                newStock: stockValue
+            });
+        }
+    );
+});
 /************************* PURCHASE ROUTES *************************/
 // Purchase route
 server.put('/purchase', verifyToken, (req, res) => {
@@ -492,13 +626,26 @@ server.post('/reviews/product/:productId', (req, res) => {
     const comment = req.body.comment;
     const productId = req.params.productId;
 
+    console.log('Checking user ID:', userId);
+
+    // Use exact column names from your database
     const checkCustomerTypeQuery = `SELECT customertype FROM users WHERE ID = ?`;
+    console.log('Running SQL query:', checkCustomerTypeQuery, 'with ID:', userId);
     db.get(checkCustomerTypeQuery, [userId], (err, user) => {
+        
         if (err) {
+            console.error('Database error:', err);
             return res.status(500).json({ error: 'Database error', details: err.message });
         }
         
-        if (!user || user.customertype !== 'customer') {
+        if (!user) {
+            return res.status(403).json({ error: 'User not found' });
+        }
+
+       
+
+        // Make sure the comparison matches exactly what's in your database
+        if (user.customertype !== 'customer') {
             return res.status(403).json({ error: 'Only customers can write reviews' });
         }
 
@@ -512,8 +659,7 @@ server.post('/reviews/product/:productId', (req, res) => {
                 return res.status(403).json({ error: 'You must purchase the product before reviewing it' });
             }
 
-            const insertReviewQuery = `INSERT INTO reviews (user_ID, product_ID, rating, comment) VALUES (?, ?, ?, ?)`;
-            db.run(insertReviewQuery, [userId, productId, rating, comment], function(err) {
+            const insertReviewQuery = `INSERT INTO reviews (userID, productID, rating, comment) VALUES (?, ?, ?, ?)`;            db.run(insertReviewQuery, [userId, productId, rating, comment], function(err) {
                 if (err) {
                     return res.status(500).json({ error: 'Error adding review', details: err.message });
                 }
@@ -532,8 +678,8 @@ server.get('/products/:productId/reviews', (req, res) => {
     const query = `
         SELECT r.*, u.name as userName
         FROM reviews r
-        JOIN users u ON r.user_ID = u.ID
-        WHERE r.product_ID = ?
+        JOIN users u ON r.userID = u.ID
+        WHERE r.productID = ?
     `;
     
     db.all(query, [productId], (err, rows) => {
