@@ -412,25 +412,6 @@ server.get('/products/:id', (req, res) => {
     });
 });
 
-// Search for products
-server.get('/products/search', (req, res) => {
-    let name = req.query.name;
-    let query = 'SELECT * FROM products WHERE stock > 0'
-    let params = [];
-    
-    if (name && name.trim() !== '') {
-        query += ' AND name LIKE ?';
-        params.push(`%${name}%`);
-    }
-    db.all(query, params, (err, rows) => {
-        if (err) {
-            console.log(err);
-            return res.status(500).send(err);
-        } else {
-            return res.send(rows);
-        }
-    });
-});
 // Get stores that sell a specific product
 server.get('/products/:productId/stores', (req, res) => {
     const productId = req.params.productId;
