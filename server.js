@@ -76,13 +76,44 @@ server.get('/check-auth', (req, res) => {
         return res.json({
             authenticated: true,
             customertype: decoded.customertype,
-            email: decoded.email,
             ID: decoded.id,  
-            name: decoded.name
         });
     });
 });
+const verifyStoreOwner = (req, res, next) => {
+    const storeId = req.params.storeId;
+    const userId = req.user.id;
 
+    db.get(
+        'SELECT * FROM stores WHERE ID = ? AND user_ID = ?',
+        [storeId, userId],
+        (err, store) => {
+            if (err) {
+                return res.status(500).json({ 
+                    message: 'Error verifying store ownership',
+                    error: err.message 
+                });
+            }
+
+            if (!store) {
+                return res.status(403).json({ 
+                    message: 'Unauthorized: You do not own this store' 
+                });
+            }
+
+            next();
+        }
+    );
+};
+const authenticateToken = (req, res, next) => {
+    const token = req.cookies.auth;
+    
+    if (!token) {
+        return res.status(401).json({ 
+            message: "Authentication required" 
+        });
+    }
+}
 // User registration route
 server.post('/users/register', (req, res) => {
     let name = req.body.name;
@@ -351,6 +382,7 @@ server.get('/stores/:storeId/products', verifyToken, (req, res) => {
         res.status(200).json(rows);
     });
 });
+
 /************************* PRODUCT MANAGEMENT ROUTES *************************/
 // Get all products
 server.get('/products', (req, res) => {
@@ -452,6 +484,97 @@ server.put(`/products/edit/:id/:stock`, (req, res) => {
     });
 }); 
 
+// GET endpoint to fetch store products with their stock
+server.get('/stores/:storeId/products', authenticateToken, (req, res) => {
+    const storeId = req.params.storeId;
+
+    // First verify if the user owns this store
+    db.get(
+        'SELECT * FROM stores WHERE ID = ? AND user_ID = ?',
+        [storeId, req.user.id],
+        (err, store) => {
+            if (err) {
+                console.error('Error verifying store ownership:', err);
+                return res.status(500).json({
+                    message: 'Error verifying store ownership',
+                    error: err.message
+                });
+            }
+
+            if (!store) {
+                return res.status(403).json({
+                    message: 'Unauthorized: You do not own this store'
+                });
+            }
+
+            // If authorized, fetch the store products with their details
+            const query = `
+                SELECT 
+                    p.ID,
+                    p.name,
+                    p.category,
+                    p.image_url,
+                    sp.price as store_price,
+                    sp.stock,
+                    sp.ID as store_product_id
+                FROM products p
+                JOIN store_products sp ON p.ID = sp.product_ID
+                WHERE sp.store_ID = ?
+            `;
+
+            db.all(query, [storeId], (err, products) => {
+                if (err) {
+                    console.error('Error fetching store products:', err);
+                    return res.status(500).json({
+                        message: 'Error fetching store products',
+                        error: err.message
+                    });
+                }
+
+                res.json(products);
+            });
+        }
+    );
+});
+// PUT endpoint to update product stock for a specific store
+server.put('/stores/:storeId/products/:productId/stock/:newStock', async (req, res) => {
+    const { storeId, productId, newStock } = req.params;
+    
+    // Validate newStock is a positive number
+    const stockValue = parseInt(newStock);
+    if (isNaN(stockValue) || stockValue < 0) {
+        return res.status(400).json({
+            message: 'Invalid stock value. Must be a non-negative number.'
+        });
+    }
+
+    db.run(
+        'UPDATE store_products SET stock = ? WHERE store_ID = ? AND product_ID = ?',
+        [stockValue, storeId, productId],
+        function(err) {
+            if (err) {
+                console.error('Error updating stock:', err);
+                return res.status(500).json({ 
+                    message: 'Error updating stock',
+                    error: err.message 
+                });
+            }
+
+            if (this.changes === 0) {
+                return res.status(404).json({ 
+                    message: 'Product not found in store' 
+                });
+            }
+
+            res.status(200).json({ 
+                message: 'Stock updated successfully',
+                storeId,
+                productId,
+                newStock: stockValue
+            });
+        }
+    );
+});
 /************************* PURCHASE ROUTES *************************/
 // Purchase route
 server.put('/purchase', verifyToken, (req, res) => {
@@ -498,7 +621,6 @@ server.put('/purchase', verifyToken, (req, res) => {
 /************************* REVIEW ROUTES *************************/
 // Add review
 server.post('/reviews/product/:productId', (req, res) => {
-    console.log('Full request body:', req.body);
     const userId = req.body.userId;
     const rating = req.body.rating;
     const comment = req.body.comment;
